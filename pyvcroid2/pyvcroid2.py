@@ -38,7 +38,7 @@ class VcRoid2(object):
         self.__param = None
         self.__default_parameter = None
         self.__parameter = None
-        
+
         # Acquire the install path
         if install_path is None:
             if 2**32 <= sys.maxsize:
@@ -87,7 +87,7 @@ class VcRoid2(object):
         self.__dll.AITalkAPI_TextToSpeech.restype = aitalk.ResultCode
         self.__dll.AITalkAPI_CloseSpeech.restype = aitalk.ResultCode
         self.__dll.AITalkAPI_GetData.restype = aitalk.ResultCode
-        
+
         # Initialize DLL
         config = aitalk.TConfig(
             hzVoiceDB = VcRoid2.__SAMPLE_RATE,
@@ -101,7 +101,7 @@ class VcRoid2(object):
         if result != aitalk.ResultCode.SUCCESS:
             raise Exception(result)
         self.__is_opened = True
-        
+
     def __del__(self):
         self.__close()
 
@@ -172,7 +172,7 @@ class VcRoid2(object):
             os.chdir(cd)
         if result != aitalk.ResultCode.SUCCESS:
             raise Exception(result)
-    
+
     def reloadPhraseDictionary(self, path):
         '''
         Reload the phrase dictionary (フレーズ辞書)
@@ -193,7 +193,7 @@ class VcRoid2(object):
             self.__dll.AITalkAPI_ReloadPhraseDic(c_void_p())
         elif result != aitalk.ResultCode.SUCCESS:
             raise Exception(result)
-        
+
     def reloadWordDictionary(self, path):
         '''
         Reload the word dictionary (単語辞書)
@@ -263,7 +263,7 @@ class VcRoid2(object):
         '''
         if not self.__is_opened:
             raise RuntimeError()
-        
+
         # Unload current voice library
         #result = self.__dll.AITalkAPI_VoiceClear()
         #if (result != aitalk.ResultCode.SUCCESS) and (result != aitalk.ResultCode.NOT_LOADED):
@@ -299,7 +299,7 @@ class VcRoid2(object):
         result = self.__dll.AITalkAPI_GetParam(self.__default_parameter, byref(param_size))
         if result != aitalk.ResultCode.SUCCESS:
             raise Exception(result)
-        
+
         # Copy
         self.__parameter = TTtsParam()
         memmove(addressof(self.__parameter), addressof(self.__default_parameter), sizeof(TTtsParam))
@@ -341,7 +341,7 @@ class VcRoid2(object):
             The text to convert
         timeout : float
             Timeout of conversion process in seconds
-        
+
         Returns
         -------
         kana : string
@@ -388,7 +388,7 @@ class VcRoid2(object):
             result = self.__dll.AITalkAPI_TextToKana(byref(job_id), job_param, c_char_p(shiftjis_string))
             if result != aitalk.ResultCode.SUCCESS:
                 raise Exception(result)
-            
+
             # Wait for the conversion
             event_flag = event.wait(timeout)
 
@@ -417,7 +417,7 @@ class VcRoid2(object):
             The AIKANA string that was converted textToKana()
         timeout : float
             Timeout of conversion process in seconds
-        
+
         Returns
         -------
         speech : bytes
@@ -427,7 +427,7 @@ class VcRoid2(object):
         '''
         if not self.__is_opened:
             raise RuntimeError()
-        
+
         # Create variables used by the callback
         event = threading.Event()
         raw_buf = (c_char * min(self.__parameter.lenRawBufBytes * 2, VcRoid2.__LEN_RAW_BUF_MAX))()
@@ -465,7 +465,7 @@ class VcRoid2(object):
             elif reason == aitalk.EventReasonCode.BOOKMARK:
                 tts_events.append((tick, TtsEventType.BOOKMARK, value))
             return 0
-        
+
         try:
             # Set callback function to parameter
             self.__parameter.procRawBuf = aitalk.ProcRawBuf(rawbuf_callback)
@@ -480,7 +480,7 @@ class VcRoid2(object):
             result = self.__dll.AITalkAPI_TextToSpeech(byref(job_id), job_param, c_char_p(kana.encode("shift-jis")))
             if result != aitalk.ResultCode.SUCCESS:
                 raise Exception(result)
-            
+
             # Wait for the conversion
             event_flag = event.wait(timeout)
 
@@ -497,7 +497,7 @@ class VcRoid2(object):
             # Remove callback function from parameter
             self.__parameter.procRawBuf = aitalk.ProcRawBuf()
             self.__parameter.procEventTts = aitalk.ProcEventTts()
-        
+
         # Add WAVE header information
         output_size = output.seek(0, io.SEEK_END)
         output.seek(0)
@@ -522,7 +522,7 @@ class VcRoid2(object):
             The text to convert
         timeout : float
             Timeout of conversion process in seconds
-        
+
         Returns
         -------
         speech : bytes
@@ -870,3 +870,82 @@ class Param(object):
         pauseSentence must be longer than or equal to pauseLong
         '''
         self.__speaker_parameter.pauseSentence = max(self.minPauseSentence, min(int(value), self.maxPauseSentence))
+
+import argparse
+import json
+
+def script():
+  parser = argparse.ArgumentParser(
+    prog ='pyvcroid2',
+    description ='Access to Core DLL of VOICEROID2')
+  parser.add_argument('--text', help="text to aitalk")
+  parser.add_argument('-o', '--output', help="output path to save wav", default='aitalk.wav')
+  parser.add_argument('--language', help="specify language", default=None)
+  parser.add_argument('--voice', help="specify voice", default=None)
+  parser.add_argument('--volume', type=float, help="specify volume", default=1.0)
+  parser.add_argument('--masterVolume', type=float, help="specify masterVolume", default=1.0)
+  parser.add_argument('--speed', type=float, help="specify speed", default=1.0)
+  parser.add_argument('--pitch', type=float, help="specify pitch", default=1.0)
+  parser.add_argument('--emphasis', type=float, help="specify emphasis", default=1.0)
+  parser.add_argument('--pauseMiddle', type=int, help="specify pauseMiddle", default=80)
+  parser.add_argument('--pauseLong', type=int, help="specify pauseLong", default=100)
+  parser.add_argument('--pauseSentence', type=int, help="specify pauseSentence", default=200)
+  parser.add_argument('-j', '--json', help="specify arguments by json", default='{}')
+
+  args = parser.parse_args()
+  options = {
+    'text': args.text,
+    'output': args.output,
+    'language': args.language,
+    'voice': args.voice,
+    'volume': args.volume,
+    'masterVolume': args.masterVolume,
+    'speed': args.speed,
+    'pitch': args.pitch,
+    'emphasis': args.emphasis,
+    'pauseMiddle': args.pauseMiddle,
+    'pauseLong': args.pauseLong,
+    'pauseSentence': args.pauseSentence,
+  }
+  if args.json:
+    options.update(json.loads(args.json))
+
+  if not options['text']:
+    raise Exception('please specify text')
+
+  vc = VcRoid2()
+  lang_list = vc.listLanguages()
+
+  if options['language']:
+    if options['language'] in lang_list:
+      vc.loadLanguage(options['language'])
+    else:
+      raise Exception(f'No language library `{options["language"]}`')
+  elif 'standard' in lang_list:
+    vc.loadLanguage('standard')
+  else:
+    raise Exception('No language library')
+
+  voice_list = vc.listVoices()
+  if options['voice']:
+    if options['voice'] in voice_list:
+      vc.loadVoice(options['voice'])
+    else:
+      raise Exception(f'No voice library `{options["voice"]}`')
+  elif 0 < len(voice_list):
+    vc.loadVoice(voice_list[0])
+  else:
+    raise Exception('No voice library')
+
+  vc.param.volume = options['volume']
+  vc.param.speed = options['speed']
+  vc.param.pitch = options['pitch']
+  vc.param.emphasis = options['emphasis']
+  vc.param.pauseMiddle = options['pauseMiddle']
+  vc.param.pauseLong = options['pauseLong']
+  vc.param.pauseSentence = options['pauseSentence']
+  vc.param.masterVolume = options['masterVolume']
+
+  speech, _tts_events = vc.textToSpeech(options['text'])
+  with open(options['output'], mode="wb") as f:
+    f.write(speech)
